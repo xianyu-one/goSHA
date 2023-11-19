@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 func calculateSHA256(filePath string) (string, error) {
@@ -85,6 +86,8 @@ func main() {
 	progress := int64(0)
 	totalFiles := len(files)
 
+	startTime := time.Now()
+
 	for _, file := range files {
 		if !file.IsDir() && !strings.EqualFold(file.Name(), "SHA256.md") {
 			filePath := filepath.Join(*pathPtr, file.Name())
@@ -110,5 +113,9 @@ func main() {
 		return
 	}
 
+	endTime := time.Now()
+	elapsedTime := endTime.Sub(startTime).Round(time.Second * 10).String()
+
 	fmt.Println("Table has been written to SHA256.md successfully.")
+	fmt.Println("Total time elapsed:", elapsedTime)
 }
