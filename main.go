@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 )
 
 func calculateSHA256(filePath string) (string, error) {
@@ -40,6 +42,25 @@ func writeToFile(filePath string, content string) error {
 	return nil
 }
 
+func processFile(filePath string, wg *sync.WaitGroup, resultChan chan<- string, progress *int64, totalFiles int) {
+	defer wg.Done()
+
+	sha256, err := calculateSHA256(filePath)
+	if err != nil {
+		fmt.Printf("Error calculating SHA256 for file %s: %s\n", filePath, err)
+		resultChan <- ""
+		return
+	}
+
+	result := fmt.Sprintf("| %s | %s |\n", filepath.Base(filePath), sha256)
+	resultChan <- result
+
+	// Update progress
+	atomic.AddInt64(progress, 1)
+	currentProgress := atomic.LoadInt64(progress)
+	fmt.Printf("Progress: %d/%d\n", currentProgress, int64(totalFiles))
+}
+
 func main() {
 	pathPtr := flag.String("p", "", "Target folder path")
 	flag.Parse()
@@ -59,28 +80,35 @@ func main() {
 
 	table := "| Filename | SHA256 |\n| --- | --- |\n"
 
-	for i, file := range files {
+	var wg sync.WaitGroup
+	resultChan := make(chan string)
+	progress := int64(0)
+	totalFiles := len(files)
+
+	for _, file := range files {
 		if !file.IsDir() && !strings.EqualFold(file.Name(), "SHA256.md") {
 			filePath := filepath.Join(*pathPtr, file.Name())
-			sha256, err := calculateSHA256(filePath)
-			if err != nil {
-				fmt.Printf("Error calculating SHA256 for file %s: %s\n", file.Name(), err)
-				continue
-			}
-
-			row := fmt.Sprintf("| %s | %s |\n", file.Name(), sha256)
-			table += row
+			wg.Add(1)
+			go processFile(filePath, &wg, resultChan, &progress, totalFiles)
 		}
+	}
 
-		// Output progress
-		fmt.Printf("Progress: %d/%d\n", i+1, len(files))
+	go func() {
+		wg.Wait()
+		close(resultChan)
+	}()
+
+	for result := range resultChan {
+		if result != "" {
+			table += result
+		}
 	}
 
 	err = writeToFile(readmeFilePath, table)
 	if err != nil {
-		fmt.Println("Error writing to SHA:", err)
+		fmt.Println("Error writing to SHA256.md:", err)
 		return
 	}
 
-	fmt.Println("Table has been written to SHA256.md t successfully.")
+	fmt.Println("Table has been written to SHA256.md successfully.")
 }
