@@ -1,0 +1,11 @@
+stages:
+  - build
+
+build:
+  stage: build
+  image: golang:latest
+  script:
+    - go build -o myprogram main.go
+  artifacts:
+    paths:
+      - myprogram
