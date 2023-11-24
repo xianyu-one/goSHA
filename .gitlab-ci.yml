@@ -8,4 +8,4 @@ build:
     - go build -o goSHA main.go
   artifacts:
     paths:
-      - myprogram
+      - goSHA
